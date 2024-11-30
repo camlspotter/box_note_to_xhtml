@@ -1,0 +1,9 @@
+[project]
+name = "box-note-to-xhtml"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "typeguard>=4.4.1",
+]
