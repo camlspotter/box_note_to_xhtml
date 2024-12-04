@@ -68,14 +68,25 @@ class List(Ast):
     def print(self, out:TextIOWrapper) -> None:
         out.write('<ul>')
         for c in self.content:
-            out.write('<li>')
-            for cc in c:
-                # <li> <p> => <li>
-                if isinstance(cc, Paragraph):
-                    prints(out, cc.content)
-                else:
-                    cc.print(out)
+            c.print(out)
         out.write('</ul>')
+
+class List_item(Ast):
+    content : list[list[Ast]]
+
+    def __init__(self, cs : list[list[Ast]]):
+        self.content = cs
+
+    def print(self, out:TextIOWrapper) -> None:
+        out.write('<li>')
+        # <li> <p> => <li>
+        
+        for i, c in enumerate(self.content):
+            if i == 0 and isinstance(c, Paragraph):
+                prints(out, c.content)
+            else:
+                c.print(out)
+        out.write('</li>')
 
 class Hard_break(Ast):
     def __init__(self):
@@ -85,13 +96,16 @@ class Hard_break(Ast):
         out.write('<br/>')
 
 class Unknown(Ast):
-    type : str
+    dict : dict
 
-    def __init__(self, type : str):
-        self.type = type
+    def __init__(self, d : dict):
+        print('Warning: unsupported: ', json.dumps(d))
+        self.dict = d
 
     def print(self, out:TextIOWrapper) -> None:
-        out.write(f'unknown {self.type}')
+        out.write("<pre>\n")
+        out.write(json.dumps(self.dict))
+        out.write("\n</pre>\n")
 
 class Href(Ast):
     url : str
@@ -105,6 +119,26 @@ class Href(Ast):
         out.write(f'<a href="{self.url}">')
         prints(out, self.content)
         out.write(f'</a>')
+    
+class Image(Ast):
+    url : str
+
+    def __init__(self, url : str):
+        self.url = url
+
+    def print(self, out:TextIOWrapper) -> None:
+        out.write(f'<img src="{self.url}"/>')
+    
+class Blockquote(Ast):
+    content : list[Ast]
+
+    def __init__(self, content : list[Ast]):
+        self.content = content
+
+    def print(self, out:TextIOWrapper) -> None:
+        out.write('<blockquote>')
+        prints(out, self.content)
+        out.write('</blockquote>')
     
 def parse_top(d : dict) -> Ast:
     version = d['version']
@@ -127,11 +161,17 @@ def parse_doc(d : dict) -> Ast:
         case 'paragraph':
             return Paragraph(parse_content(d))
         case 'bullet_list':
-            return List([parse_list_item(i) for i in d['content']])
+            return List(parse_content(d))
         case 'hard_break':
             return Hard_break()
+        case 'list_item':
+            return List_item(parse_content(d))
+        case 'image':
+            return parse_image(d)
+        case 'blockquote':
+            return Blockquote(parse_content(d))
         case _:
-            return Unknown(d['type'])
+            return Unknown(d)
     assert False
 
 def parse_marks(marks : dict, d : Ast) -> Ast:
@@ -143,8 +183,16 @@ def parse_marks(marks : dict, d : Ast) -> Ast:
                 pass
     return d
     
+def parse_image(d : dict) -> Ast:
+    assert d['type'] == 'image'
+    match d['attrs'].get('boxSharedLink'):
+        case None:
+            return Unknown(d)
+        case url:
+            return Image(url)
+    
 def parse_content(d : dict) -> list[Ast]:
-    return [ parse_doc(e) for e in d['content'] ]
+    return [ parse_doc(e) for e in d.get('content', []) ]
 
 def parse_list_item(d : dict) -> list[Ast]:
     return parse_content(d)
